@@ -41,7 +41,9 @@ export default async function KHDSPage() {
         )
       : [];
 
-  return (
+  return (<p style={{ background: "yellow", padding: 8, fontWeight: 900 }}>
+  DEPLOY CHECK: KHDS v2
+</p>
     <main style={{ padding: 24, maxWidth: 1100, margin: "0 auto" }}>
       <h1 style={{ fontSize: 34, marginBottom: 6 }}>KHDS Lions</h1>
 

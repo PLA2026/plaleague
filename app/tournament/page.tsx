@@ -2,7 +2,6 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 import { supabase } from "@/lib/supabaseClient";
-import type { ReactNode } from "react";
 
 type SeedRow = {
   division_name: string;
@@ -59,14 +58,14 @@ export default async function TournamentPage() {
         <p className="pla-subtle">
           Bracket status: <strong>{state?.locked ? "Locked" : "Not locked"}</strong>
         </p>
-        <div className="error">
+
+        <div className="pla-error">
           <div>
             <strong>Data error</strong>
           </div>
           {seedsError ? <div>Seeds: {seedsError.message}</div> : null}
           {matchesError ? <div>Matches: {matchesError.message}</div> : null}
         </div>
-        <Styles />
       </main>
     );
   }
@@ -74,18 +73,22 @@ export default async function TournamentPage() {
   const seeds = (seedsData ?? []) as unknown as SeedRow[];
   const matches = (matchesData ?? []) as unknown as MatchRow[];
 
+  // Build: division -> (seedLabel -> team name)
   const seedNameByDivision = new Map<string, Map<string, string>>();
   for (const row of seeds) {
     const div = row.division_name;
+
     if (!seedNameByDivision.has(div)) seedNameByDivision.set(div, new Map());
     const map = seedNameByDivision.get(div)!;
 
     const schoolName = row.school?.[0]?.name ?? "";
-    const schoolShort =
+    const schoolShort: "KHDS" | "BMA" =
       schoolName.toLowerCase().includes("khds") ? "KHDS" : "BMA";
 
-    const key = keyForSeed(schoolShort as "KHDS" | "BMA", row.seed);
-    map.set(key, row.team?.[0]?.name ?? `Seed ${row.seed}`);
+    const key = keyForSeed(schoolShort, row.seed);
+    const teamName = row.team?.[0]?.name ?? `Seed ${row.seed}`;
+
+    map.set(key, teamName);
   }
 
   const divisions = Array.from(
@@ -93,23 +96,25 @@ export default async function TournamentPage() {
   );
 
   return (
-    <main className="page">
-      <h1 className="title">End-of-Season Tournament</h1>
-      <p className="subtle">
-        Bracket status: <strong>{state?.locked ? "Locked ✅" : "Not locked yet"}</strong>
+    <main className="pla-page">
+      <h1 className="pla-title">End-of-Season Tournament</h1>
+
+      <p className="pla-subtle">
+        Bracket status:{" "}
+        <strong>{state?.locked ? "Locked ✅" : "Not locked yet"}</strong>
         {state?.locked_at
           ? ` (locked at ${new Date(state.locked_at).toLocaleString()})`
           : ""}
       </p>
 
       {!state?.locked ? (
-        <div className="callout">
+        <div className="pla-callout">
           Go to <code>/admin</code> → Tournament →{" "}
           <strong>Lock Seeds &amp; Generate Bracket</strong>.
         </div>
       ) : null}
 
-      <div className="stack">
+      <div className="pla-stack">
         {divisions.map((div) => (
           <DivisionBracket
             key={div}
@@ -119,8 +124,6 @@ export default async function TournamentPage() {
           />
         ))}
       </div>
-
-      <Styles />
     </main>
   );
 }
@@ -143,13 +146,13 @@ function DivisionBracket({
   function displayTeam(seedLabel: string | null) {
     if (!seedLabel) return "TBD";
     if (seedNameMap.has(seedLabel)) return seedNameMap.get(seedLabel)!;
-    return seedLabel;
+    return seedLabel; // e.g. WIN(QF-1), LOSE(PI-BMA)
   }
 
   return (
     <section className="pla-card">
-      <div className="cardHeader">
-        <h2 className="cardTitle">{prettyDivisionName(divisionName)}</h2>
+      <div className="pla-cardHeader">
+        <h2 className="pla-cardTitle">{prettyDivisionName(divisionName)}</h2>
         <p className="pla-subtleSm">Cross-fill bracket + guarantee match</p>
       </div>
 
@@ -216,9 +219,10 @@ function DivisionBracket({
 
       <div className="pla-guaranteeWrap">
         <h3 className="pla-guaranteeTitle">Guarantee Match (to 15)</h3>
-        <p className="subtleSm">
+        <p className="pla-subtleSm">
           First-round losers play a one-game consolation so every team gets at least two matches.
         </p>
+
         <div className="pla-guaranteeRow">
           {guarantee.map((m) => (
             <MatchCard
@@ -243,7 +247,7 @@ function Column({
 }: {
   title: string;
   subtitle?: string;
-  children: ReactNode;
+  children: React.ReactNode;
 }) {
   return (
     <div className="pla-col">
@@ -272,8 +276,9 @@ function MatchCard({
   big?: boolean;
 }) {
   const hasScore = typeof scoreA === "number" && typeof scoreB === "number";
+
   return (
-    <div className="pla-match" ${big ? className="pla-matchBig" : ""}`}>
+    <div className={`pla-match ${big ? "pla-matchBig" : ""}`}>
       <div className="pla-matchLabel">{label}</div>
 
       <div className="pla-teamRow">
@@ -281,9 +286,9 @@ function MatchCard({
         <div className="pla-teamScore">{hasScore ? scoreA : ""}</div>
       </div>
 
-      <div className="teamRow">
-        <div className="teamName">{b}</div>
-        <div className="teamScore">{hasScore ? scoreB : ""}</div>
+      <div className="pla-teamRow">
+        <div className="pla-teamName">{b}</div>
+        <div className="pla-teamScore">{hasScore ? scoreB : ""}</div>
       </div>
     </div>
   );

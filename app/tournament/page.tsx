@@ -118,7 +118,56 @@ map.set(key, row.team?.[0]?.name ?? `Seed ${row.seed}`);
         ))}
       </div>
 
-      <style>{css}</style>
+      <style jsx global>{`
+  .page{ padding:24px; max-width:1200px; margin:0 auto; }
+  .title{ font-size:34px; margin:0 0 10px; }
+  .subtle{ opacity:.8; margin:0 0 16px; }
+  .subtleSm{ opacity:.75; margin:6px 0 0; font-size:13px; }
+  .callout{ background:#fff; border:1px solid rgba(0,0,0,.12); border-radius:14px; padding:14px; margin:12px 0 18px; }
+  .error{ background:#fff; border:1px solid rgba(220,38,38,.35); border-radius:14px; padding:14px; color:#b91c1c; }
+  .stack{ display:grid; gap:18px; }
+
+  .card{ background:#fff; border:1px solid rgba(0,0,0,.12); border-radius:18px; padding:16px; }
+  .cardHeader{ display:flex; align-items:flex-end; justify-content:space-between; gap:14px; flex-wrap:wrap; }
+  .cardTitle{ margin:0; font-size:20px; }
+
+  .bracketGrid{
+    margin-top:14px;
+    display:grid;
+    grid-template-columns: repeat(4, minmax(220px, 1fr));
+    gap:14px;
+    overflow-x:auto;
+    padding-bottom:6px;
+  }
+
+  .col{ border:1px solid rgba(0,0,0,.10); border-radius:16px; padding:12px; min-width:220px; }
+  .colHeader{ margin-bottom:10px; }
+  .colTitle{ font-weight:900; letter-spacing:.2px; }
+  .colSub{ opacity:.7; font-size:12px; margin-top:2px; }
+
+  .colBody{ display:grid; gap:10px; }
+
+  .match{
+    border:1px solid rgba(0,0,0,.10);
+    border-radius:14px;
+    padding:10px;
+    background:rgba(255,255,255,.9);
+  }
+  .matchBig{ padding:14px; }
+  .matchLabel{ font-size:12px; opacity:.7; font-weight:900; margin-bottom:8px; letter-spacing:.2px; }
+  .teamRow{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:6px 8px; border-radius:10px; background:rgba(0,0,0,.035); margin-bottom:6px; }
+  .teamRow:last-child{ margin-bottom:0; }
+  .teamName{ font-weight:800; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .teamScore{ font-weight:900; min-width:26px; text-align:right; }
+
+  .guaranteeWrap{
+    margin-top:14px;
+    border-top:1px dashed rgba(0,0,0,.18);
+    padding-top:14px;
+  }
+  .guaranteeTitle{ margin:0; font-size:16px; }
+  .guaranteeRow{ margin-top:10px; display:flex; gap:10px; flex-wrap:wrap; }
+`}</style>
     </main>
   );
 }
@@ -288,54 +337,4 @@ function MatchCard({
     </div>
   );
 }
-
-const css = `
-  .page{ padding:24px; max-width:1200px; margin:0 auto; }
-  .title{ font-size:34px; margin:0 0 10px; }
-  .subtle{ opacity:.8; margin:0 0 16px; }
-  .subtleSm{ opacity:.75; margin:6px 0 0; font-size:13px; }
-  .callout{ background:#fff; border:1px solid rgba(0,0,0,.12); border-radius:14px; padding:14px; margin:12px 0 18px; }
-  .error{ background:#fff; border:1px solid rgba(220,38,38,.35); border-radius:14px; padding:14px; color:#b91c1c; }
-  .stack{ display:grid; gap:18px; }
-
-  .card{ background:#fff; border:1px solid rgba(0,0,0,.12); border-radius:18px; padding:16px; }
-  .cardHeader{ display:flex; align-items:flex-end; justify-content:space-between; gap:14px; flex-wrap:wrap; }
-  .cardTitle{ margin:0; font-size:20px; }
-
-  .bracketGrid{
-    margin-top:14px;
-    display:grid;
-    grid-template-columns: repeat(4, minmax(220px, 1fr));
-    gap:14px;
-    overflow-x:auto;
-    padding-bottom:6px;
-  }
-
-  .col{ border:1px solid rgba(0,0,0,.10); border-radius:16px; padding:12px; min-width:220px; }
-  .colHeader{ margin-bottom:10px; }
-  .colTitle{ font-weight:900; letter-spacing:.2px; }
-  .colSub{ opacity:.7; font-size:12px; margin-top:2px; }
-
-  .colBody{ display:grid; gap:10px; }
-
-  .match{
-    border:1px solid rgba(0,0,0,.10);
-    border-radius:14px;
-    padding:10px;
-    background:rgba(255,255,255,.9);
-  }
-  .matchBig{ padding:14px; }
-  .matchLabel{ font-size:12px; opacity:.7; font-weight:900; margin-bottom:8px; letter-spacing:.2px; }
-  .teamRow{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:6px 8px; border-radius:10px; background:rgba(0,0,0,.035); margin-bottom:6px; }
-  .teamRow:last-child{ margin-bottom:0; }
-  .teamName{ font-weight:800; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .teamScore{ font-weight:900; min-width:26px; text-align:right; }
-
-  .guaranteeWrap{
-    margin-top:14px;
-    border-top:1px dashed rgba(0,0,0,.18);
-    padding-top:14px;
-  }
-  .guaranteeTitle{ margin:0; font-size:16px; }
-  .guaranteeRow{ margin-top:10px; display:flex; gap:10px; flex-wrap:wrap; }
 `;

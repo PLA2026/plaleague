@@ -45,11 +45,11 @@ export default async function TournamentPage() {
     .select("division_name,seed, team:teams(id,name), school:schools(name)");
 
   const { data: matchesData, error: matchesError } = await supabase
-    .from("tournament_matches")
-    .select(
-      "division_name,round,match_label,team1_seed,team2_seed,team1_id,team2_id,score1,score2,winner_team_id"
-    )
-    .order("division_name", { ascending: true });
+  .from("tournament_matches")
+  .select(
+    "id,division_name,round,match_label,team1_seed,team2_seed,team1_id,team2_id,winner_team_id, team1:teams!tournament_matches_team1_fk(name), team2:teams!tournament_matches_team2_fk(name)"
+  )
+  .order("division_name", { ascending: true });
 
   if (seedsError || matchesError) {
     return (

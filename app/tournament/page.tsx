@@ -7,8 +7,8 @@ import { supabase } from "@/lib/supabaseClient";
 type SeedRow = {
   division_name: string;
   seed: number;
-  school: { name: string } | null;
-  team: { id: number; name: string } | null;
+  school: { name: string }[]; // <-- array
+  team: { id: number; name: string }[]; // <-- array
 };
 
 type MatchRow = {
@@ -81,16 +81,10 @@ export default async function TournamentPage() {
     if (!seedNameByDivision.has(div)) seedNameByDivision.set(div, new Map());
     const map = seedNameByDivision.get(div)!;
 
-    const schoolName = row.school?.name ?? "";
-    const schoolShort =
-      schoolName.toLowerCase().includes("khds") ? "KHDS" :
-      schoolName.toLowerCase().includes("bma") ? "BMA" :
-      schoolName.toUpperCase().includes("KHDS") ? "KHDS" :
-      "BMA";
+    const schoolName = row.school?.[0]?.name ?? "";
 
-    const key = keyForSeed(schoolShort as "KHDS" | "BMA", row.seed);
-    map.set(key, row.team?.name ?? `Seed ${row.seed}`);
-  }
+const key = keyForSeed(schoolShort as "KHDS" | "BMA", row.seed);
+map.set(key, row.team?.[0]?.name ?? `Seed ${row.seed}`);
 
   const divisions = Array.from(
     new Set(matches.map((m) => m.division_name).filter(Boolean))

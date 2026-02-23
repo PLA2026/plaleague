@@ -1,3 +1,5 @@
+import "./globals.css";
+
 export const metadata = {
   title: "PLĀ — Pickleball League of the Americas",
   description: "Youth pickleball program: curriculum, standings, schedules, tournament.",

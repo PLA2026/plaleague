@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+import type { ReactNode } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
 type SeedRow = {
@@ -248,7 +249,7 @@ function Column({
 }: {
   title: string;
   subtitle?: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <div className="col">

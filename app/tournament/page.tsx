@@ -54,9 +54,9 @@ export default async function TournamentPage() {
 
   if (seedsError || matchesError) {
     return (
-      <main className="page">
-        <h1 className="title">End-of-Season Tournament</h1>
-        <p className="subtle">
+      <main className="pla-page">
+        <h1 className="pla-title">End-of-Season Tournament</h1>
+        <p className="pla-subtle">
           Bracket status: <strong>{state?.locked ? "Locked" : "Not locked"}</strong>
         </p>
         <div className="error">
@@ -147,13 +147,13 @@ function DivisionBracket({
   }
 
   return (
-    <section className="card">
+    <section className="pla-card">
       <div className="cardHeader">
         <h2 className="cardTitle">{prettyDivisionName(divisionName)}</h2>
-        <p className="subtleSm">Cross-fill bracket + guarantee match</p>
+        <p className="pla-subtleSm">Cross-fill bracket + guarantee match</p>
       </div>
 
-      <div className="bracketGrid">
+      <div className="pla-bracketGrid">
         <Column title="Play-In" subtitle="4 vs 5 (each school)">
           {playIns
             .sort((a, b) => (a.match_label ?? "").localeCompare(b.match_label ?? ""))
@@ -214,12 +214,12 @@ function DivisionBracket({
         </Column>
       </div>
 
-      <div className="guaranteeWrap">
-        <h3 className="guaranteeTitle">Guarantee Match (to 15)</h3>
+      <div className="pla-guaranteeWrap">
+        <h3 className="pla-guaranteeTitle">Guarantee Match (to 15)</h3>
         <p className="subtleSm">
           First-round losers play a one-game consolation so every team gets at least two matches.
         </p>
-        <div className="guaranteeRow">
+        <div className="pla-guaranteeRow">
           {guarantee.map((m) => (
             <MatchCard
               key={`${m.round}-${m.match_label}`}
@@ -246,12 +246,12 @@ function Column({
   children: ReactNode;
 }) {
   return (
-    <div className="col">
-      <div className="colHeader">
-        <div className="colTitle">{title}</div>
-        {subtitle ? <div className="colSub">{subtitle}</div> : null}
+    <div className="pla-col">
+      <div className="pla-colHeader">
+        <div className="pla-colTitle">{title}</div>
+        {subtitle ? <div className="pla-colSub">{subtitle}</div> : null}
       </div>
-      <div className="colBody">{children}</div>
+      <div className="pla-colBody">{children}</div>
     </div>
   );
 }
@@ -273,12 +273,12 @@ function MatchCard({
 }) {
   const hasScore = typeof scoreA === "number" && typeof scoreB === "number";
   return (
-    <div className={`match ${big ? "matchBig" : ""}`}>
-      <div className="matchLabel">{label}</div>
+    <div className="pla-match" ${big ? className="pla-matchBig" : ""}`}>
+      <div className="pla-matchLabel">{label}</div>
 
-      <div className="teamRow">
-        <div className="teamName">{a}</div>
-        <div className="teamScore">{hasScore ? scoreA : ""}</div>
+      <div className="pla-teamRow">
+        <div className="pla-teamName">{a}</div>
+        <div className="pla-teamScore">{hasScore ? scoreA : ""}</div>
       </div>
 
       <div className="teamRow">

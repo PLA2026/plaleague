@@ -45,26 +45,6 @@ export default async function BMAPage() {
     <main style={{ padding: 24, maxWidth: 1100, margin: "0 auto" }}>
       <h1 style={{ fontSize: 34, marginBottom: 6 }}>BMA Bulldogs</h1>
 
-      <section
-        style={{
-          background: "white",
-          border: "1px solid rgba(0,0,0,0.12)",
-          borderRadius: 12,
-          padding: 14,
-          margin: "14px 0 22px",
-          fontSize: 13,
-          opacity: 0.9,
-        }}
-      >
-        <div><strong>Debug</strong></div>
-        <div>schoolName query: <code>{schoolName}</code></div>
-        <div>school found: <code>{school ? "YES" : "NO"}</code></div>
-        <div>schoolId: <code>{schoolId ?? "null"}</code></div>
-        <div>schoolError: <code>{schoolError?.message ?? "none"}</code></div>
-        <div>divisions count: <code>{divisions?.length ?? 0}</code></div>
-        <div>divisionsError: <code>{divisionsError?.message ?? "none"}</code></div>
-      </section>
-
       {divisionBlocks.length === 0 ? (
         <p style={{ opacity: 0.8 }}>
           No divisions found for this school yet. (See Debug box above.)

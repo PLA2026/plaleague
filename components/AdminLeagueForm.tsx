@@ -81,6 +81,22 @@ export default function AdminLeagueForm() {
     }
 
     setStatus("Saved ✅ Refresh the school standings page to see updates.");
+    <button
+  onClick={async () => {
+    setStatus("Locking seeds + generating bracket...");
+    const res = await fetch("/api/admin/lock-bracket", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) return setStatus(`Error: ${json.error ?? "Unknown error"}`);
+    setStatus("Bracket locked ✅ Go to /tournament");
+  }}
+  style={{ ...button, marginTop: 10 }}
+>
+  Lock Seeds & Generate Bracket
+</button>
   }
 
   return (

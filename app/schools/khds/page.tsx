@@ -1,4 +1,5 @@
-export const dynamic = "force-dynamic";import { supabase } from "@/lib/supabaseClient";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;import { supabase } from "@/lib/supabaseClient";
 import StandingsTable from "@/components/StandingsTable";
 import type { TeamRow } from "@/lib/standings";
 

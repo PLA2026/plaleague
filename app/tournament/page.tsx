@@ -3,6 +3,8 @@ export const revalidate = 0;
 
 import { supabase } from "@/lib/supabaseClient";
 
+type TeamRow = { id: number; name: string };
+
 type SeedRow = {
   division_name: string;
   seed: number;
@@ -11,6 +13,7 @@ type SeedRow = {
 };
 
 type MatchRow = {
+  id: number;
   division_name: string;
   round: string;
   match_label: string;
@@ -40,32 +43,28 @@ export default async function TournamentPage() {
     .eq("id", 1)
     .maybeSingle();
 
-  const { data: seedsData, error: seedsError } = await supabase
+  // Get all teams once so we can map team_id -> team name
+  const { data: teamsData } = await supabase.from("teams").select("id,name");
+  const teamNameById = new Map<number, string>(
+    ((teamsData ?? []) as TeamRow[]).map((t) => [t.id, t.name])
+  );
+
+  const { data: seedsData } = await supabase
     .from("tournament_seeds")
     .select("division_name,seed, team:teams(id,name), school:schools(name)");
 
   const { data: matchesData, error: matchesError } = await supabase
-  .from("tournament_matches")
-  .select(
-    "id,division_name,round,match_label,team1_seed,team2_seed,team1_id,team2_id,winner_team_id, team1:teams!tournament_matches_team1_fk(name), team2:teams!tournament_matches_team2_fk(name)"
-  )
-  .order("division_name", { ascending: true });
+    .from("tournament_matches")
+    .select(
+      "id,division_name,round,match_label,team1_seed,team2_seed,team1_id,team2_id,score1,score2,winner_team_id"
+    )
+    .order("division_name", { ascending: true });
 
-  if (seedsError || matchesError) {
+  if (matchesError) {
     return (
       <main className="pla-page">
         <h1 className="pla-title">End-of-Season Tournament</h1>
-        <p className="pla-subtle">
-          Bracket status: <strong>{state?.locked ? "Locked" : "Not locked"}</strong>
-        </p>
-
-        <div className="pla-error">
-          <div>
-            <strong>Data error</strong>
-          </div>
-          {seedsError ? <div>Seeds: {seedsError.message}</div> : null}
-          {matchesError ? <div>Matches: {matchesError.message}</div> : null}
-        </div>
+        <div className="pla-error">Matches error: {matchesError.message}</div>
       </main>
     );
   }
@@ -73,11 +72,10 @@ export default async function TournamentPage() {
   const seeds = (seedsData ?? []) as unknown as SeedRow[];
   const matches = (matchesData ?? []) as unknown as MatchRow[];
 
-  // Build: division -> (seedLabel -> team name)
+  // Build: division -> seedLabel -> team name (for KHDS-1 style labels)
   const seedNameByDivision = new Map<string, Map<string, string>>();
   for (const row of seeds) {
     const div = row.division_name;
-
     if (!seedNameByDivision.has(div)) seedNameByDivision.set(div, new Map());
     const map = seedNameByDivision.get(div)!;
 
@@ -85,32 +83,23 @@ export default async function TournamentPage() {
     const schoolShort: "KHDS" | "BMA" =
       schoolName.toLowerCase().includes("khds") ? "KHDS" : "BMA";
 
-    const key = keyForSeed(schoolShort, row.seed);
-    const teamName = row.team?.[0]?.name ?? `Seed ${row.seed}`;
-
-    map.set(key, teamName);
+    map.set(keyForSeed(schoolShort, row.seed), row.team?.[0]?.name ?? `Seed ${row.seed}`);
   }
 
-  const divisions = Array.from(
-    new Set(matches.map((m) => m.division_name).filter(Boolean))
-  );
+  const divisions = Array.from(new Set(matches.map((m) => m.division_name).filter(Boolean)));
 
   return (
     <main className="pla-page">
       <h1 className="pla-title">End-of-Season Tournament</h1>
 
       <p className="pla-subtle">
-        Bracket status:{" "}
-        <strong>{state?.locked ? "Locked ✅" : "Not locked yet"}</strong>
-        {state?.locked_at
-          ? ` (locked at ${new Date(state.locked_at).toLocaleString()})`
-          : ""}
+        Bracket status: <strong>{state?.locked ? "Locked ✅" : "Not locked yet"}</strong>
+        {state?.locked_at ? ` (locked at ${new Date(state.locked_at).toLocaleString()})` : ""}
       </p>
 
       {!state?.locked ? (
         <div className="pla-callout">
-          Go to <code>/admin</code> → Tournament →{" "}
-          <strong>Lock Seeds &amp; Generate Bracket</strong>.
+          Go to <code>/admin</code> → Tournament → <strong>Lock Seeds &amp; Generate Bracket</strong>.
         </div>
       ) : null}
 
@@ -121,6 +110,7 @@ export default async function TournamentPage() {
             divisionName={div}
             matches={matches.filter((m) => m.division_name === div)}
             seedNameMap={seedNameByDivision.get(div) ?? new Map()}
+            teamNameById={teamNameById}
           />
         ))}
       </div>
@@ -132,10 +122,12 @@ function DivisionBracket({
   divisionName,
   matches,
   seedNameMap,
+  teamNameById,
 }: {
   divisionName: string;
   matches: MatchRow[];
   seedNameMap: Map<string, string>;
+  teamNameById: Map<number, string>;
 }) {
   const playIns = matches.filter((m) => m.round === "Play-In");
   const qfs = matches.filter((m) => m.round === "Quarterfinal");
@@ -143,10 +135,18 @@ function DivisionBracket({
   const finals = matches.filter((m) => m.round === "Final");
   const guarantee = matches.filter((m) => m.round === "Guarantee");
 
-  function displayTeam(seedLabel: string | null) {
-    if (!seedLabel) return "TBD";
-    if (seedNameMap.has(seedLabel)) return seedNameMap.get(seedLabel)!;
-    return seedLabel; // e.g. WIN(QF-1), LOSE(PI-BMA)
+  function displayTeam(m: MatchRow, side: 1 | 2) {
+    const teamId = side === 1 ? m.team1_id : m.team2_id;
+    const seedLabel = side === 1 ? m.team1_seed : m.team2_seed;
+
+    // 1) Prefer real team IDs (this is what makes the bracket “change”)
+    if (teamId && teamNameById.has(teamId)) return teamNameById.get(teamId)!;
+
+    // 2) If it's a KHDS-# / BMA-# seed, use the seed map
+    if (seedLabel && seedNameMap.has(seedLabel)) return seedNameMap.get(seedLabel)!;
+
+    // 3) Otherwise show the seed label (WIN(QF-1), etc.)
+    return seedLabel ?? "TBD";
   }
 
   return (
@@ -162,12 +162,14 @@ function DivisionBracket({
             .sort((a, b) => (a.match_label ?? "").localeCompare(b.match_label ?? ""))
             .map((m) => (
               <MatchCard
-                key={`${m.round}-${m.match_label}`}
+                key={m.id}
                 label={m.match_label}
-                a={displayTeam(m.team1_seed)}
-                b={displayTeam(m.team2_seed)}
-                scoreA={m.score1}
-                scoreB={m.score2}
+                a={displayTeam(m, 1)}
+                b={displayTeam(m, 2)}
+                winnerId={m.winner_team_id}
+                team1Id={m.team1_id}
+                team2Id={m.team2_id}
+                teamNameById={teamNameById}
               />
             ))}
         </Column>
@@ -177,12 +179,14 @@ function DivisionBracket({
             .sort((a, b) => (a.match_label ?? "").localeCompare(b.match_label ?? ""))
             .map((m) => (
               <MatchCard
-                key={`${m.round}-${m.match_label}`}
+                key={m.id}
                 label={m.match_label}
-                a={displayTeam(m.team1_seed)}
-                b={displayTeam(m.team2_seed)}
-                scoreA={m.score1}
-                scoreB={m.score2}
+                a={displayTeam(m, 1)}
+                b={displayTeam(m, 2)}
+                winnerId={m.winner_team_id}
+                team1Id={m.team1_id}
+                team2Id={m.team2_id}
+                teamNameById={teamNameById}
               />
             ))}
         </Column>
@@ -192,12 +196,14 @@ function DivisionBracket({
             .sort((a, b) => (a.match_label ?? "").localeCompare(b.match_label ?? ""))
             .map((m) => (
               <MatchCard
-                key={`${m.round}-${m.match_label}`}
+                key={m.id}
                 label={m.match_label}
-                a={displayTeam(m.team1_seed)}
-                b={displayTeam(m.team2_seed)}
-                scoreA={m.score1}
-                scoreB={m.score2}
+                a={displayTeam(m, 1)}
+                b={displayTeam(m, 2)}
+                winnerId={m.winner_team_id}
+                team1Id={m.team1_id}
+                team2Id={m.team2_id}
+                teamNameById={teamNameById}
               />
             ))}
         </Column>
@@ -205,13 +211,15 @@ function DivisionBracket({
         <Column title="Final" subtitle="Championship">
           {finals.map((m) => (
             <MatchCard
-              key={`${m.round}-${m.match_label}`}
+              key={m.id}
               label="FINAL"
-              a={displayTeam(m.team1_seed)}
-              b={displayTeam(m.team2_seed)}
-              scoreA={m.score1}
-              scoreB={m.score2}
+              a={displayTeam(m, 1)}
+              b={displayTeam(m, 2)}
               big
+              winnerId={m.winner_team_id}
+              team1Id={m.team1_id}
+              team2Id={m.team2_id}
+              teamNameById={teamNameById}
             />
           ))}
         </Column>
@@ -226,12 +234,14 @@ function DivisionBracket({
         <div className="pla-guaranteeRow">
           {guarantee.map((m) => (
             <MatchCard
-              key={`${m.round}-${m.match_label}`}
+              key={m.id}
               label={m.match_label}
-              a={displayTeam(m.team1_seed)}
-              b={displayTeam(m.team2_seed)}
-              scoreA={m.score1}
-              scoreB={m.score2}
+              a={displayTeam(m, 1)}
+              b={displayTeam(m, 2)}
+              winnerId={m.winner_team_id}
+              team1Id={m.team1_id}
+              team2Id={m.team2_id}
+              teamNameById={teamNameById}
             />
           ))}
         </div>
@@ -264,32 +274,52 @@ function MatchCard({
   label,
   a,
   b,
-  scoreA,
-  scoreB,
   big,
+  winnerId,
+  team1Id,
+  team2Id,
+  teamNameById,
 }: {
   label: string;
   a: string;
   b: string;
-  scoreA: number | null;
-  scoreB: number | null;
   big?: boolean;
+  winnerId: number | null;
+  team1Id: number | null;
+  team2Id: number | null;
+  teamNameById: Map<number, string>;
 }) {
-  const hasScore = typeof scoreA === "number" && typeof scoreB === "number";
+  function isWinner(side: 1 | 2) {
+    if (!winnerId) return false;
+    const tid = side === 1 ? team1Id : team2Id;
+    return !!tid && tid === winnerId;
+  }
 
   return (
     <div className={`pla-match ${big ? "pla-matchBig" : ""}`}>
       <div className="pla-matchLabel">{label}</div>
 
-      <div className="pla-teamRow">
-        <div className="pla-teamName">{a}</div>
-        <div className="pla-teamScore">{hasScore ? scoreA : ""}</div>
+      <div className="pla-teamRow" style={isWinner(1) ? { outline: "2px solid rgba(34,197,94,0.35)" } : undefined}>
+        <div className="pla-teamName">
+          {a}
+          {isWinner(1) ? " ✅" : ""}
+        </div>
+        <div className="pla-teamScore"></div>
       </div>
 
-      <div className="pla-teamRow">
-        <div className="pla-teamName">{b}</div>
-        <div className="pla-teamScore">{hasScore ? scoreB : ""}</div>
+      <div className="pla-teamRow" style={isWinner(2) ? { outline: "2px solid rgba(34,197,94,0.35)" } : undefined}>
+        <div className="pla-teamName">
+          {b}
+          {isWinner(2) ? " ✅" : ""}
+        </div>
+        <div className="pla-teamScore"></div>
       </div>
+
+      {winnerId ? (
+        <div className="pla-subtleSm" style={{ marginTop: 8 }}>
+          Winner: <strong>{teamNameById.get(winnerId) ?? `#${winnerId}`}</strong>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -21,8 +21,6 @@ type MatchRow = {
   team2_seed: string | null;
   team1_id: number | null;
   team2_id: number | null;
-  score1: number | null;
-  score2: number | null;
   winner_team_id: number | null;
 };
 
@@ -43,7 +41,7 @@ export default async function TournamentPage() {
     .eq("id", 1)
     .maybeSingle();
 
-  // Get all teams once so we can map team_id -> team name
+  // Fetch all teams once so we can map team_id -> team name
   const { data: teamsData } = await supabase.from("teams").select("id,name");
   const teamNameById = new Map<number, string>(
     ((teamsData ?? []) as TeamRow[]).map((t) => [t.id, t.name])
@@ -56,7 +54,7 @@ export default async function TournamentPage() {
   const { data: matchesData, error: matchesError } = await supabase
     .from("tournament_matches")
     .select(
-      "id,division_name,round,match_label,team1_seed,team2_seed,team1_id,team2_id,score1,score2,winner_team_id"
+      "id,division_name,round,match_label,team1_seed,team2_seed,team1_id,team2_id,winner_team_id"
     )
     .order("division_name", { ascending: true });
 
@@ -169,7 +167,6 @@ function DivisionBracket({
                 winnerId={m.winner_team_id}
                 team1Id={m.team1_id}
                 team2Id={m.team2_id}
-                teamNameById={teamNameById}
               />
             ))}
         </Column>
@@ -186,7 +183,6 @@ function DivisionBracket({
                 winnerId={m.winner_team_id}
                 team1Id={m.team1_id}
                 team2Id={m.team2_id}
-                teamNameById={teamNameById}
               />
             ))}
         </Column>
@@ -203,7 +199,6 @@ function DivisionBracket({
                 winnerId={m.winner_team_id}
                 team1Id={m.team1_id}
                 team2Id={m.team2_id}
-                teamNameById={teamNameById}
               />
             ))}
         </Column>
@@ -219,7 +214,6 @@ function DivisionBracket({
               winnerId={m.winner_team_id}
               team1Id={m.team1_id}
               team2Id={m.team2_id}
-              teamNameById={teamNameById}
             />
           ))}
         </Column>
@@ -241,7 +235,6 @@ function DivisionBracket({
               winnerId={m.winner_team_id}
               team1Id={m.team1_id}
               team2Id={m.team2_id}
-              teamNameById={teamNameById}
             />
           ))}
         </div>
@@ -278,7 +271,6 @@ function MatchCard({
   winnerId,
   team1Id,
   team2Id,
-  teamNameById,
 }: {
   label: string;
   a: string;
@@ -287,7 +279,6 @@ function MatchCard({
   winnerId: number | null;
   team1Id: number | null;
   team2Id: number | null;
-  teamNameById: Map<number, string>;
 }) {
   function isWinner(side: 1 | 2) {
     if (!winnerId) return false;
@@ -314,12 +305,6 @@ function MatchCard({
         </div>
         <div className="pla-teamScore"></div>
       </div>
-
-      {winnerId ? (
-        <div className="pla-subtleSm" style={{ marginTop: 8 }}>
-          Winner: <strong>{teamNameById.get(winnerId) ?? `#${winnerId}`}</strong>
-        </div>
-      ) : null}
     </div>
   );
 }

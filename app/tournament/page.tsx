@@ -1,16 +1,11 @@
+import { supabase } from "@/lib/supabaseClient";
+
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-import { supabase } from "@/lib/supabaseClient";
-
 type TeamRow = { id: number; name: string };
 
-type SeedRow = {
-  division_name: string;
-  seed: number;
-  school: { name: string }[];
-  team: { id: number; name: string }[];
-};
+type SeedAny = any;
 
 type MatchRow = {
   id: number;
@@ -30,7 +25,11 @@ function prettyDivisionName(name: string) {
   return name;
 }
 
-function schoolShortFromName(s: string): "KHDS" | "BMA" {
+function isExplicitSeedLabel(s?: string | null) {
+  return !!s && /^(KHDS|BMA)-\d+$/.test(s);
+}
+
+function schoolShortFromSchoolName(s: string): "KHDS" | "BMA" {
   return s.toLowerCase().includes("khds") ? "KHDS" : "BMA";
 }
 
@@ -41,32 +40,50 @@ export default async function TournamentPage() {
     .eq("id", 1)
     .maybeSingle();
 
-  // Teams map: id -> base name (Team 1..Team 5 for now)
+  // Teams map (id -> "Team 1" etc. for now)
   const { data: teamsData } = await supabase.from("teams").select("id,name");
   const baseTeamNameById = new Map<number, string>(
     ((teamsData ?? []) as TeamRow[]).map((t) => [t.id, t.name])
   );
 
-  // Seeds map: for each division, map team_id -> "KHDS-1" / "BMA-3"
+  /**
+   * Build: division -> team_id -> seedLabel (e.g., KHDS-1)
+   *
+   * We fetch tournament_seeds in a way that works whether joins return arrays or objects.
+   */
   const { data: seedsData } = await supabase
     .from("tournament_seeds")
-    .select("division_name,seed, team:teams(id,name), school:schools(name)");
-
-  const seeds = (seedsData ?? []) as unknown as SeedRow[];
+    .select("division_name,seed,team_id,school_id, team:teams(id,name), school:schools(name)");
 
   const seedLabelByTeamIdByDivision = new Map<string, Map<number, string>>();
-  for (const row of seeds) {
-    const div = row.division_name;
+
+  for (const row of (seedsData ?? []) as SeedAny[]) {
+    const div: string | undefined = row.division_name;
+    if (!div) continue;
+
+    // Robustly extract teamId (works for raw team_id OR joined team object/array)
+    const teamId: number | undefined =
+      (typeof row.team_id === "number" ? row.team_id : undefined) ??
+      (typeof row.team?.id === "number" ? row.team.id : undefined) ??
+      (typeof row.team?.[0]?.id === "number" ? row.team[0].id : undefined);
+
+    if (!teamId) continue;
+
+    // Robustly extract school name from join
+    const schoolName: string =
+      (typeof row.school?.name === "string" ? row.school.name : "") ||
+      (typeof row.school?.[0]?.name === "string" ? row.school[0].name : "") ||
+      "";
+
+    // If we can’t read school name, we still can’t build KHDS/BMA prefix reliably
+    if (!schoolName) continue;
+
+    const short = schoolShortFromSchoolName(schoolName);
+    const seedNum: number | undefined = typeof row.seed === "number" ? row.seed : undefined;
+    if (!seedNum) continue;
+
     if (!seedLabelByTeamIdByDivision.has(div)) seedLabelByTeamIdByDivision.set(div, new Map());
-    const map = seedLabelByTeamIdByDivision.get(div)!;
-
-    const schoolName = row.school?.[0]?.name ?? "";
-    const short = schoolShortFromName(schoolName);
-    const teamId = row.team?.[0]?.id;
-
-    if (teamId) {
-      map.set(teamId, `${short}-${row.seed}`);
-    }
+    seedLabelByTeamIdByDivision.get(div)!.set(teamId, `${short}-${seedNum}`);
   }
 
   const { data: matchesData, error: matchesError } = await supabase
@@ -88,12 +105,16 @@ export default async function TournamentPage() {
   const matches = (matchesData ?? []) as unknown as MatchRow[];
   const divisions = Array.from(new Set(matches.map((m) => m.division_name).filter(Boolean)));
 
-  // Helper: show a readable team string for a given team_id in a division
-  function displayNameForTeamId(division: string, teamId: number) {
-    const seedMap = seedLabelByTeamIdByDivision.get(division);
-    const prefix = seedMap?.get(teamId);
+  // Given a teamId, return "KHDS-1 • Team 1" (or just "Team 1" if seed is unknown)
+  function displayTeamId(division: string, teamId: number, fallbackSeed?: string | null) {
     const base = baseTeamNameById.get(teamId) ?? `Team #${teamId}`;
-    return prefix ? `${prefix} • ${base}` : base;
+    const seedMap = seedLabelByTeamIdByDivision.get(division);
+
+    // Prefer explicit seed label if present in match seeds (KHDS-# / BMA-#)
+    const explicit = isExplicitSeedLabel(fallbackSeed) ? fallbackSeed! : null;
+
+    const seedLabel = explicit || seedMap?.get(teamId) || null;
+    return seedLabel ? `${seedLabel} • ${base}` : base;
   }
 
   return (
@@ -117,7 +138,9 @@ export default async function TournamentPage() {
             key={div}
             divisionName={div}
             matches={matches.filter((m) => m.division_name === div)}
-            displayNameForTeamId={(teamId) => displayNameForTeamId(div, teamId)}
+            displayTeamId={(teamId: number, fallbackSeed?: string | null) =>
+              displayTeamId(div, teamId, fallbackSeed)
+            }
           />
         ))}
       </div>
@@ -128,11 +151,11 @@ export default async function TournamentPage() {
 function DivisionBracket({
   divisionName,
   matches,
-  displayNameForTeamId,
+  displayTeamId,
 }: {
   divisionName: string;
   matches: MatchRow[];
-  displayNameForTeamId: (teamId: number) => string;
+  displayTeamId: (teamId: number, fallbackSeed?: string | null) => string;
 }) {
   const playIns = matches.filter((m) => m.round === "Play-In");
   const qfs = matches.filter((m) => m.round === "Quarterfinal");
@@ -144,10 +167,7 @@ function DivisionBracket({
     const teamId = side === 1 ? m.team1_id : m.team2_id;
     const seedLabel = side === 1 ? m.team1_seed : m.team2_seed;
 
-    // Prefer real team IDs (with KHDS-# / BMA-# prefix)
-    if (teamId) return displayNameForTeamId(teamId);
-
-    // Otherwise show seed label placeholders (WIN(QF-1), LOSE(...), TBD)
+    if (teamId) return displayTeamId(teamId, seedLabel);
     return seedLabel ?? "TBD";
   }
 

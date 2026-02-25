@@ -36,9 +36,15 @@ export default function AdminTournamentForm() {
 
   async function loadMatches() {
     setStatus("");
+    if (!password) return setStatus("Enter admin password first.");
     setLoadingMatches(true);
+
     try {
-      const res = await fetch(`/api/admin/tournament-matches?division=${encodeURIComponent(divisionName)}`);
+      const res = await fetch(`/api/admin/tournament-matches-secure`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password, divisionName }),
+      });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error ?? "Failed to load matches");
       setMatches(json?.matches ?? []);

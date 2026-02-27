@@ -17,10 +17,17 @@ export async function POST(req: Request) {
     }
 
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-    const supabase = createClient(url, anon);
+    const service = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+    if (!url || !service) {
+      return NextResponse.json(
+        { error: "Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY" },
+        { status: 500 }
+      );
+    }
 
-    // Find school_id by name (KHDS or BMA)
+    const supabase = createClient(url, service, { auth: { persistSession: false } });
+
+    // Resolve school_id
     const { data: schoolRow, error: schoolErr } = await supabase
       .from("schools")
       .select("id,name")
@@ -30,7 +37,7 @@ export async function POST(req: Request) {
     if (schoolErr) return NextResponse.json({ error: schoolErr.message }, { status: 500 });
     if (!schoolRow?.id) return NextResponse.json({ error: "School not found" }, { status: 404 });
 
-    // Find division_id by division name + school_id
+    // Resolve division_id
     const { data: divRow, error: divErr } = await supabase
       .from("divisions")
       .select("id,name,school_id")

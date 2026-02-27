@@ -30,11 +30,7 @@ export async function POST(req: Request) {
       if (typeof score1 !== "number" || typeof score2 !== "number") {
         return NextResponse.json({ error: "score1 and score2 must be numbers" }, { status: 400 });
       }
-      const { error } = await supabase
-        .from("league_matches")
-        .update({ score1, score2 })
-        .eq("id", matchId);
-
+      const { error } = await supabase.from("league_matches").update({ score1, score2 }).eq("id", matchId);
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
       return NextResponse.json({ ok: true });
     }

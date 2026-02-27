@@ -72,10 +72,11 @@ export default function AdminLeagueForm() {
     try {
       // Existing route you already use for league entry:
       // If your repo uses a different route name, tell me what it is and I’ll swap it.
-      const res = await fetch("/api/admin/league-game", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const res = await fetch("/api/admin/teams-secure", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ password, schoolCode, divisionName }),
+});
           password,
           schoolCode,
           divisionName,

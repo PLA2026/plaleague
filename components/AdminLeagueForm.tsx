@@ -14,24 +14,19 @@ type ExistingGame = {
 };
 
 export default function AdminLeagueForm() {
-  // Password
   const [password, setPassword] = useState("");
 
-  // Filters
   const [schoolCode, setSchoolCode] = useState<"KHDS" | "BMA">("KHDS");
   const [divisionName, setDivisionName] = useState<"4-5" | "6-8">("4-5");
 
-  // Teams dropdowns
   const [teams, setTeams] = useState<Option[]>([]);
   const [team1Id, setTeam1Id] = useState<number | "">("");
   const [team2Id, setTeam2Id] = useState<number | "">("");
 
-  // New game scores
   const [score1, setScore1] = useState("");
   const [score2, setScore2] = useState("");
   const [status, setStatus] = useState("");
 
-  // Existing games edit/delete
   const [existingGames, setExistingGames] = useState<ExistingGame[]>([]);
   const [loadingGames, setLoadingGames] = useState(false);
   const [selectedGameId, setSelectedGameId] = useState<number | "">("");
@@ -43,22 +38,43 @@ export default function AdminLeagueForm() {
     return existingGames.find((g) => g.id === selectedGameId) ?? null;
   }, [existingGames, selectedGameId]);
 
-  // Load teams for selected school/division
+  // ✅ Load teams securely (requires password)
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`/api/admin/teams?school=${schoolCode}&division=${divisionName}`);
+        // Don’t spam API until password is entered
+        if (!password) {
+          setTeams([]);
+          setTeam1Id("");
+          setTeam2Id("");
+          return;
+        }
+
+        const res = await fetch("/api/admin/teams-secure", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password, schoolCode, divisionName }),
+        });
+
+        const json = await res.json();
         if (!res.ok) {
           setTeams([]);
           return;
         }
-        const json = await res.json();
-        setTeams(Array.isArray(json?.teams) ? json.teams : []);
+
+        const loaded = Array.isArray(json?.teams) ? json.teams : [];
+        setTeams(loaded);
+
+        // If current selections no longer exist, reset them
+        const ids = new Set<number>(loaded.map((t: any) => t.id));
+        if (team1Id && !ids.has(Number(team1Id))) setTeam1Id("");
+        if (team2Id && !ids.has(Number(team2Id))) setTeam2Id("");
       } catch {
         setTeams([]);
       }
     })();
-  }, [schoolCode, divisionName]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [password, schoolCode, divisionName]);
 
   async function recordLeagueGame() {
     setStatus("");
@@ -122,7 +138,6 @@ export default function AdminLeagueForm() {
     }
   }
 
-  // Prefill edit scores when selecting a game
   useEffect(() => {
     if (!selectedGame) {
       setEditScore1("");
@@ -241,6 +256,12 @@ export default function AdminLeagueForm() {
           </select>
         </label>
       </div>
+
+      {!password ? (
+        <div style={{ marginTop: 10, padding: 12, borderRadius: 12, background: "rgba(2,6,23,0.04)", fontWeight: 800 }}>
+          Enter your admin password to load teams.
+        </div>
+      ) : null}
 
       <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid rgba(0,0,0,0.08)" }}>
         <h3 style={{ margin: 0, fontSize: 16 }}>Record League Game (one game to 11)</h3>

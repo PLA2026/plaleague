@@ -73,6 +73,17 @@ export default function AdminTournamentForm() {
       return setStatus("Enter at least Game 1 and Game 2 scores (Game 3 optional).");
     }
 
+    const normalized = cleaned.map((g) => ({
+      game_number: g.game_number,
+      points1: Number(g.points1),
+      points2: Number(g.points2),
+
+      // alternate key names some APIs use
+      score1: Number(g.points1),
+      score2: Number(g.points2),
+      gameNumber: g.game_number,
+    }));
+
     try {
       const res = await fetch("/api/admin/tournament-score", {
         method: "POST",
@@ -80,11 +91,11 @@ export default function AdminTournamentForm() {
         body: JSON.stringify({
           password,
           matchId: selectedMatchId,
-          games: cleaned.map((g) => ({
-            game_number: g.game_number,
-            points1: Number(g.points1),
-            points2: Number(g.points2),
-          })),
+
+          // send all common variants so your existing API recognizes it
+          games: normalized,
+          gameScores: normalized,
+          game_scores: normalized,
         }),
       });
 

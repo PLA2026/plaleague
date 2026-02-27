@@ -51,7 +51,7 @@ export async function POST(req: Request) {
     if (divErr) return NextResponse.json({ error: divErr.message }, { status: 500 });
     if (!divRow?.id) return NextResponse.json({ error: "Division not found" }, { status: 404 });
 
-    // Insert league match
+    // Insert a single league game (one game to 11)
     const { data: inserted, error: insErr } = await supabase
       .from("league_matches")
       .insert({

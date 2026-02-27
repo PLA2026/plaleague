@@ -1,235 +1,426 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
 
-type School = { id: number; name: string };
-type Division = { id: number; name: string; school_id: number };
-type Team = { id: number; name: string; division_id: number };
+type Option = { id: number; name: string };
+
+type ExistingGame = {
+  id: number;
+  team1_id: number;
+  team2_id: number;
+  score1: number;
+  score2: number;
+  label: string;
+};
 
 export default function AdminLeagueForm() {
+  // ----- EXISTING: Record League Game -----
   const [password, setPassword] = useState("");
-  const [schools, setSchools] = useState<School[]>([]);
-  const [divisions, setDivisions] = useState<Division[]>([]);
-  const [teams, setTeams] = useState<Team[]>([]);
 
-  const [schoolId, setSchoolId] = useState<number | "">("");
-  const [divisionId, setDivisionId] = useState<number | "">("");
-  const [teamAId, setTeamAId] = useState<number | "">("");
-  const [teamBId, setTeamBId] = useState<number | "">("");
-  const [scoreA, setScoreA] = useState<number | "">(11);
-  const [scoreB, setScoreB] = useState<number | "">(7);
+  const [schoolCode, setSchoolCode] = useState<"KHDS" | "BMA">("KHDS");
+  const [divisionName, setDivisionName] = useState<"4-5" | "6-8">("4-5");
 
-  const [status, setStatus] = useState<string>("");
+  const [teams, setTeams] = useState<Option[]>([]);
+  const [team1Id, setTeam1Id] = useState<number | "">("");
+  const [team2Id, setTeam2Id] = useState<number | "">("");
 
+  const [score1, setScore1] = useState("");
+  const [score2, setScore2] = useState("");
+
+  const [status, setStatus] = useState("");
+
+  // ----- NEW: Edit/Delete Existing League Game -----
+  const [existingGames, setExistingGames] = useState<ExistingGame[]>([]);
+  const [loadingGames, setLoadingGames] = useState(false);
+  const [selectedGameId, setSelectedGameId] = useState<number | "">("");
+  const [editScore1, setEditScore1] = useState("");
+  const [editScore2, setEditScore2] = useState("");
+  const [editStatus, setEditStatus] = useState("");
+
+  const selectedGame = useMemo(
+    () => existingGames.find((g) => g.id === selectedGameId) ?? null,
+    [existingGames, selectedGameId]
+  );
+
+  // Load teams for the selected school/division (used by the Record League Game form)
   useEffect(() => {
     (async () => {
-      const s = await supabase.from("schools").select("id,name").order("name");
-      const d = await supabase.from("divisions").select("id,name,school_id").order("name");
-      const t = await supabase.from("teams").select("id,name,division_id").order("name");
-      setSchools((s.data ?? []) as School[]);
-      setDivisions((d.data ?? []) as Division[]);
-      setTeams((t.data ?? []) as Team[]);
+      try {
+        // Your project already has an API for teams on admin score entry
+        // If this endpoint name differs in your repo, tell me and I'll adjust.
+        const res = await fetch(`/api/admin/teams?school=${schoolCode}&division=${divisionName}`);
+        if (!res.ok) return;
+        const json = await res.json();
+        setTeams(json?.teams ?? []);
+      } catch {
+        // no-op
+      }
     })();
-  }, []);
+  }, [schoolCode, divisionName]);
 
-  const filteredDivisions = useMemo(
-    () => divisions.filter((d) => (schoolId === "" ? true : d.school_id === schoolId)),
-    [divisions, schoolId]
-  );
-
-  const filteredTeams = useMemo(
-    () => teams.filter((t) => (divisionId === "" ? true : t.division_id === divisionId)),
-    [teams, divisionId]
-  );
-
-  async function submit() {
+  async function recordLeagueGame() {
     setStatus("");
+    if (!password) return setStatus("Enter admin password first.");
+    if (!team1Id || !team2Id) return setStatus("Select both teams.");
+    if (team1Id === team2Id) return setStatus("Teams must be different.");
+    if (score1.trim() === "" || score2.trim() === "") return setStatus("Enter both scores.");
 
-    if (!password) return setStatus("Enter admin password.");
-    if (divisionId === "" || teamAId === "" || teamBId === "") return setStatus("Pick division + both teams.");
-    if (teamAId === teamBId) return setStatus("Teams must be different.");
+    const s1 = Number(score1);
+    const s2 = Number(score2);
+    if (!Number.isFinite(s1) || !Number.isFinite(s2)) return setStatus("Scores must be numbers.");
 
-    const a = Number(scoreA);
-    const b = Number(scoreB);
+    try {
+      // Existing route you already use for league entry:
+      // If your repo uses a different route name, tell me what it is and I’ll swap it.
+      const res = await fetch("/api/admin/league-score", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          password,
+          schoolCode,
+          divisionName,
+          team1Id,
+          team2Id,
+          score1: s1,
+          score2: s2,
+        }),
+      });
 
-    if (!Number.isFinite(a) || !Number.isFinite(b)) return setStatus("Scores must be numbers.");
-    if (a === b) return setStatus("No ties allowed.");
-    if (a < 0 || b < 0 || a > 11 || b > 11) return setStatus("Scores must be 0–11.");
-    if (!((a === 11 && b <= 10) || (b === 11 && a <= 10))) return setStatus("One team must have 11, other 0–10.");
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error ?? "Failed to save league game");
 
-    setStatus("Submitting...");
+      setStatus("Saved ✅ League game recorded. Refresh the school page to see standings update.");
+      setScore1("");
+      setScore2("");
+    } catch (e: any) {
+      setStatus(`Error saving league game: ${e.message}`);
+    }
+  }
 
-    const res = await fetch("/api/admin/record-game", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        password,
-        divisionId,
-        teamAId,
-        teamBId,
-        scoreA: a,
-        scoreB: b,
-      }),
-    });
+  async function loadExistingGames() {
+    setEditStatus("");
+    if (!password) return setEditStatus("Enter admin password first.");
+    setLoadingGames(true);
 
-    const json = await res.json().catch(() => ({}));
+    try {
+      const res = await fetch("/api/admin/league-games", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password, schoolCode, divisionName }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error ?? "Failed to load games");
+      setExistingGames(json?.games ?? []);
+      setEditStatus("Games loaded.");
+    } catch (e: any) {
+      setEditStatus(`Error loading games: ${e.message}`);
+    } finally {
+      setLoadingGames(false);
+    }
+  }
 
-    if (!res.ok) {
-      setStatus(`Error: ${json.error ?? "Unknown error"}`);
+  // When selecting a game, prefill edit fields
+  useEffect(() => {
+    if (!selectedGame) {
+      setEditScore1("");
+      setEditScore2("");
       return;
     }
+    setEditScore1(String(selectedGame.score1 ?? ""));
+    setEditScore2(String(selectedGame.score2 ?? ""));
+  }, [selectedGameId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    setStatus("Saved ✅ Refresh the school standings page to see updates.");
-    <button
-  onClick={async () => {
-    setStatus("Locking seeds + generating bracket...");
-    const res = await fetch("/api/admin/lock-bracket", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password }),
-    });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) return setStatus(`Error: ${json.error ?? "Unknown error"}`);
-    setStatus("Bracket locked ✅ Go to /tournament");
-  }}
-  style={{ ...button, marginTop: 10 }}
->
-  Lock Seeds & Generate Bracket
-</button>
+  async function updateSelectedGame() {
+    setEditStatus("");
+    if (!password) return setEditStatus("Enter admin password first.");
+    if (!selectedGameId) return setEditStatus("Select a game first.");
+    if (editScore1.trim() === "" || editScore2.trim() === "") return setEditStatus("Enter both scores.");
+
+    const s1 = Number(editScore1);
+    const s2 = Number(editScore2);
+    if (!Number.isFinite(s1) || !Number.isFinite(s2)) return setEditStatus("Scores must be numbers.");
+
+    try {
+      const res = await fetch("/api/admin/league-game-edit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          password,
+          action: "update",
+          matchId: selectedGameId,
+          score1: s1,
+          score2: s2,
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error ?? "Failed to update game");
+
+      setEditStatus("Updated ✅ Refresh the school page to see standings update.");
+      await loadExistingGames();
+    } catch (e: any) {
+      setEditStatus(`Error updating game: ${e.message}`);
+    }
+  }
+
+  async function deleteSelectedGame() {
+    setEditStatus("");
+    if (!password) return setEditStatus("Enter admin password first.");
+    if (!selectedGameId) return setEditStatus("Select a game first.");
+
+    const ok = window.confirm(
+      `Delete this league game (#${selectedGameId})?\n\nThis removes it entirely so standings return to “no game played” for that result.`
+    );
+    if (!ok) return;
+
+    try {
+      const res = await fetch("/api/admin/league-game-edit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          password,
+          action: "delete",
+          matchId: selectedGameId,
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error ?? "Failed to delete game");
+
+      setEditStatus("Deleted ✅ Refresh the school page to see standings update.");
+      setSelectedGameId("");
+      await loadExistingGames();
+    } catch (e: any) {
+      setEditStatus(`Error deleting game: ${e.message}`);
+    }
   }
 
   return (
-    <section style={card}>
-      <h2 style={{ marginTop: 0 }}>Record League Game (to 11, win by 1)</h2>
+    <section className="pla-card">
+      <div className="pla-cardHeader">
+        <h2 className="pla-cardTitle">Admin — League Games</h2>
+        <p className="pla-subtleSm">Record new league games, or edit/delete existing ones.</p>
+      </div>
 
-      <div style={grid}>
-        <label style={label}>
-          Admin Password
-          <input
-            style={input}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            type="password"
-            placeholder="Enter password"
-          />
-        </label>
+      {/* Password */}
+      <label style={{ fontWeight: 900, display: "grid", gap: 6 }}>
+        Admin Password
+        <input
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          type="password"
+          placeholder="Enter admin password"
+          style={{ width: "100%", padding: 10, borderRadius: 10, border: "1px solid rgba(0,0,0,0.15)" }}
+        />
+      </label>
 
-        <label style={label}>
+      {/* School + Division */}
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
+        <label style={{ fontWeight: 900 }}>
           School
           <select
-            style={input}
-            value={schoolId}
-            onChange={(e) => setSchoolId(e.target.value ? Number(e.target.value) : "")}
+            value={schoolCode}
+            onChange={(e) => setSchoolCode(e.target.value as any)}
+            style={{ width: 220, padding: 10, borderRadius: 10, border: "1px solid rgba(0,0,0,0.15)" }}
           >
-            <option value="">Select</option>
-            {schools.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
+            <option value="KHDS">KHDS Lions</option>
+            <option value="BMA">BMA Bulldogs</option>
           </select>
         </label>
 
-        <label style={label}>
+        <label style={{ fontWeight: 900 }}>
           Division
           <select
-            style={input}
-            value={divisionId}
-            onChange={(e) => {
-              const v = e.target.value ? Number(e.target.value) : "";
-              setDivisionId(v);
-              setTeamAId("");
-              setTeamBId("");
-            }}
+            value={divisionName}
+            onChange={(e) => setDivisionName(e.target.value as any)}
+            style={{ width: 220, padding: 10, borderRadius: 10, border: "1px solid rgba(0,0,0,0.15)" }}
           >
-            <option value="">Select</option>
-            {filteredDivisions.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
+            <option value="4-5">Grades 4–5</option>
+            <option value="6-8">Grades 6–8</option>
           </select>
-        </label>
-
-        <label style={label}>
-          Team A
-          <select style={input} value={teamAId} onChange={(e) => setTeamAId(e.target.value ? Number(e.target.value) : "")}>
-            <option value="">Select</option>
-            {filteredTeams.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label style={label}>
-          Team B
-          <select style={input} value={teamBId} onChange={(e) => setTeamBId(e.target.value ? Number(e.target.value) : "")}>
-            <option value="">Select</option>
-            {filteredTeams.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label style={label}>
-          Score A
-          <input style={input} value={scoreA} onChange={(e) => setScoreA(e.target.value === "" ? "" : Number(e.target.value))} />
-        </label>
-
-        <label style={label}>
-          Score B
-          <input style={input} value={scoreB} onChange={(e) => setScoreB(e.target.value === "" ? "" : Number(e.target.value))} />
         </label>
       </div>
 
-      <button onClick={submit} style={button}>
-        Save Game
-      </button>
+      {/* RECORD NEW GAME */}
+      <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid rgba(0,0,0,0.08)" }}>
+        <h3 style={{ margin: 0, fontSize: 16 }}>Record League Game (to 11)</h3>
 
-      {status && <p style={{ marginTop: 12, opacity: 0.9 }}>{status}</p>}
+        <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <label style={{ fontWeight: 900 }}>
+              Team 1
+              <select
+                value={team1Id}
+                onChange={(e) => setTeam1Id(e.target.value ? Number(e.target.value) : "")}
+                style={{ width: 260, padding: 10, borderRadius: 10, border: "1px solid rgba(0,0,0,0.15)" }}
+              >
+                <option value="">— Select —</option>
+                {teams.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label style={{ fontWeight: 900 }}>
+              Team 2
+              <select
+                value={team2Id}
+                onChange={(e) => setTeam2Id(e.target.value ? Number(e.target.value) : "")}
+                style={{ width: 260, padding: 10, borderRadius: 10, border: "1px solid rgba(0,0,0,0.15)" }}
+              >
+                <option value="">— Select —</option>
+                {teams.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "end" }}>
+            <label style={{ fontWeight: 900 }}>
+              Team 1 Score
+              <input
+                value={score1}
+                onChange={(e) => setScore1(e.target.value)}
+                inputMode="numeric"
+                placeholder="e.g. 11"
+                style={{ width: 140, padding: 10, borderRadius: 10, border: "1px solid rgba(0,0,0,0.15)" }}
+              />
+            </label>
+
+            <label style={{ fontWeight: 900 }}>
+              Team 2 Score
+              <input
+                value={score2}
+                onChange={(e) => setScore2(e.target.value)}
+                inputMode="numeric"
+                placeholder="e.g. 7"
+                style={{ width: 140, padding: 10, borderRadius: 10, border: "1px solid rgba(0,0,0,0.15)" }}
+              />
+            </label>
+
+            <button
+              onClick={recordLeagueGame}
+              style={{
+                padding: "10px 14px",
+                borderRadius: 12,
+                border: "1px solid rgba(0,0,0,0.15)",
+                background: "white",
+                fontWeight: 900,
+                cursor: "pointer",
+              }}
+            >
+              Save League Game
+            </button>
+          </div>
+
+          {status ? (
+            <div style={{ padding: 12, borderRadius: 12, background: "rgba(2,6,23,0.04)", fontWeight: 700 }}>
+              {status}
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      {/* EDIT/DELETE EXISTING GAME */}
+      <div style={{ marginTop: 18, paddingTop: 14, borderTop: "1px solid rgba(0,0,0,0.08)" }}>
+        <h3 style={{ margin: 0, fontSize: 16 }}>Edit / Delete League Game</h3>
+
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "end", marginTop: 10 }}>
+          <button
+            onClick={loadExistingGames}
+            disabled={loadingGames}
+            style={{
+              padding: "10px 14px",
+              borderRadius: 12,
+              border: "1px solid rgba(0,0,0,0.15)",
+              background: "white",
+              fontWeight: 900,
+              cursor: "pointer",
+            }}
+          >
+            {loadingGames ? "Loading..." : "Load Existing Games"}
+          </button>
+
+          <label style={{ fontWeight: 900 }}>
+            Select Game
+            <select
+              value={selectedGameId}
+              onChange={(e) => setSelectedGameId(e.target.value ? Number(e.target.value) : "")}
+              style={{ width: 520, padding: 10, borderRadius: 10, border: "1px solid rgba(0,0,0,0.15)" }}
+            >
+              <option value="">— Select —</option>
+              {existingGames.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "end", marginTop: 10 }}>
+          <label style={{ fontWeight: 900 }}>
+            New Team 1 Score
+            <input
+              value={editScore1}
+              onChange={(e) => setEditScore1(e.target.value)}
+              inputMode="numeric"
+              placeholder="e.g. 11"
+              style={{ width: 160, padding: 10, borderRadius: 10, border: "1px solid rgba(0,0,0,0.15)" }}
+            />
+          </label>
+
+          <label style={{ fontWeight: 900 }}>
+            New Team 2 Score
+            <input
+              value={editScore2}
+              onChange={(e) => setEditScore2(e.target.value)}
+              inputMode="numeric"
+              placeholder="e.g. 7"
+              style={{ width: 160, padding: 10, borderRadius: 10, border: "1px solid rgba(0,0,0,0.15)" }}
+            />
+          </label>
+
+          <button
+            onClick={updateSelectedGame}
+            style={{
+              padding: "10px 14px",
+              borderRadius: 12,
+              border: "1px solid rgba(0,0,0,0.15)",
+              background: "white",
+              fontWeight: 900,
+              cursor: "pointer",
+            }}
+          >
+            Update Score
+          </button>
+
+          <button
+            onClick={deleteSelectedGame}
+            style={{
+              padding: "10px 14px",
+              borderRadius: 12,
+              border: "1px solid rgba(220,38,38,0.35)",
+              background: "rgba(220,38,38,0.08)",
+              fontWeight: 900,
+              cursor: "pointer",
+            }}
+          >
+            Delete Game
+          </button>
+        </div>
+
+        {editStatus ? (
+          <div style={{ marginTop: 10, padding: 12, borderRadius: 12, background: "rgba(2,6,23,0.04)", fontWeight: 700 }}>
+            {editStatus}
+          </div>
+        ) : null}
+      </div>
     </section>
   );
 }
-
-const card: React.CSSProperties = {
-  background: "white",
-  border: "1px solid rgba(0,0,0,0.12)",
-  borderRadius: 14,
-  padding: 16,
-};
-
-const grid: React.CSSProperties = {
-  display: "grid",
-  gap: 12,
-  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-};
-
-const label: React.CSSProperties = {
-  display: "grid",
-  gap: 6,
-  fontSize: 13,
-  fontWeight: 700,
-};
-
-const input: React.CSSProperties = {
-  padding: "10px 10px",
-  borderRadius: 10,
-  border: "1px solid rgba(0,0,0,0.2)",
-  fontSize: 14,
-};
-
-const button: React.CSSProperties = {
-  marginTop: 14,
-  padding: "10px 14px",
-  borderRadius: 12,
-  border: "0",
-  background: "#0f172a",
-  color: "white",
-  fontWeight: 800,
-  cursor: "pointer",
-};

@@ -44,14 +44,14 @@ export async function POST(req: Request) {
     // Pull league games for this division (raw scores)
     const { data: games, error: gamesErr } = await supabase
       .from("league_matches")
-      .select("id,division_id,team1_id,team2_id,score1,score2,created_at")
+      .select("id,division_id,team1_id,team2_id,score1,score2")
       .eq("division_id", divRow.id)
       .order("id", { ascending: false })
-      .limit(200);
+      .limit(250);
 
     if (gamesErr) return NextResponse.json({ error: gamesErr.message }, { status: 500 });
 
-    // Load team names for display
+    // Load team names for display labels
     const teamIds = Array.from(
       new Set((games ?? []).flatMap((g: any) => [g.team1_id, g.team2_id]).filter(Boolean))
     );
@@ -72,13 +72,12 @@ export async function POST(req: Request) {
         team2_id: g.team2_id,
         score1: g.score1,
         score2: g.score2,
-        created_at: g.created_at,
         label: `#${g.id} — ${nameById.get(g.team1_id) ?? "Team"} ${g.score1}-${g.score2} ${
           nameById.get(g.team2_id) ?? "Team"
         }`,
       })) ?? [];
 
-    return NextResponse.json({ games: out, schoolId: schoolRow.id, divisionId: divRow.id });
+    return NextResponse.json({ games: out });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message ?? "Unknown error" }, { status: 500 });
   }

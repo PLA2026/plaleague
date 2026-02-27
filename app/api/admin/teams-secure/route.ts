@@ -20,7 +20,6 @@ export async function POST(req: Request) {
     const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
     const supabase = createClient(url, anon);
 
-    // Resolve school_id
     const { data: schoolRow, error: schoolErr } = await supabase
       .from("schools")
       .select("id,name")
@@ -30,7 +29,6 @@ export async function POST(req: Request) {
     if (schoolErr) return NextResponse.json({ error: schoolErr.message }, { status: 500 });
     if (!schoolRow?.id) return NextResponse.json({ error: "School not found" }, { status: 404 });
 
-    // Resolve division_id
     const { data: divRow, error: divErr } = await supabase
       .from("divisions")
       .select("id,name,school_id")
@@ -41,7 +39,6 @@ export async function POST(req: Request) {
     if (divErr) return NextResponse.json({ error: divErr.message }, { status: 500 });
     if (!divRow?.id) return NextResponse.json({ error: "Division not found" }, { status: 404 });
 
-    // Load teams in this division
     const { data: teams, error: teamsErr } = await supabase
       .from("teams")
       .select("id,name")

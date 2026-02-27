@@ -14,22 +14,24 @@ type ExistingGame = {
 };
 
 export default function AdminLeagueForm() {
-  // ----- EXISTING: Record League Game -----
+  // Password
   const [password, setPassword] = useState("");
 
+  // Filters
   const [schoolCode, setSchoolCode] = useState<"KHDS" | "BMA">("KHDS");
   const [divisionName, setDivisionName] = useState<"4-5" | "6-8">("4-5");
 
+  // Teams dropdowns
   const [teams, setTeams] = useState<Option[]>([]);
   const [team1Id, setTeam1Id] = useState<number | "">("");
   const [team2Id, setTeam2Id] = useState<number | "">("");
 
+  // New game scores
   const [score1, setScore1] = useState("");
   const [score2, setScore2] = useState("");
-
   const [status, setStatus] = useState("");
 
-  // ----- NEW: Edit/Delete Existing League Game -----
+  // Existing games edit/delete
   const [existingGames, setExistingGames] = useState<ExistingGame[]>([]);
   const [loadingGames, setLoadingGames] = useState(false);
   const [selectedGameId, setSelectedGameId] = useState<number | "">("");
@@ -37,29 +39,30 @@ export default function AdminLeagueForm() {
   const [editScore2, setEditScore2] = useState("");
   const [editStatus, setEditStatus] = useState("");
 
-  const selectedGame = useMemo(
-    () => existingGames.find((g) => g.id === selectedGameId) ?? null,
-    [existingGames, selectedGameId]
-  );
+  const selectedGame = useMemo(() => {
+    return existingGames.find((g) => g.id === selectedGameId) ?? null;
+  }, [existingGames, selectedGameId]);
 
-  // Load teams for the selected school/division (used by the Record League Game form)
+  // Load teams for selected school/division
   useEffect(() => {
     (async () => {
       try {
-        // Your project already has an API for teams on admin score entry
-        // If this endpoint name differs in your repo, tell me and I'll adjust.
         const res = await fetch(`/api/admin/teams?school=${schoolCode}&division=${divisionName}`);
-        if (!res.ok) return;
+        if (!res.ok) {
+          setTeams([]);
+          return;
+        }
         const json = await res.json();
-        setTeams(json?.teams ?? []);
+        setTeams(Array.isArray(json?.teams) ? json.teams : []);
       } catch {
-        // no-op
+        setTeams([]);
       }
     })();
   }, [schoolCode, divisionName]);
 
   async function recordLeagueGame() {
     setStatus("");
+
     if (!password) return setStatus("Enter admin password first.");
     if (!team1Id || !team2Id) return setStatus("Select both teams.");
     if (team1Id === team2Id) return setStatus("Teams must be different.");
@@ -70,13 +73,10 @@ export default function AdminLeagueForm() {
     if (!Number.isFinite(s1) || !Number.isFinite(s2)) return setStatus("Scores must be numbers.");
 
     try {
-      // Existing route you already use for league entry:
-      // If your repo uses a different route name, tell me what it is and I’ll swap it.
-      const res = await fetch("/api/admin/teams-secure", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ password, schoolCode, divisionName }),
-});
+      const res = await fetch("/api/admin/league-game", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           password,
           schoolCode,
           divisionName,
@@ -94,33 +94,35 @@ export default function AdminLeagueForm() {
       setScore1("");
       setScore2("");
     } catch (e: any) {
-      setStatus(`Error saving league game: ${e.message}`);
+      setStatus(`Error saving league game: ${e?.message ?? "Unknown error"}`);
     }
   }
 
   async function loadExistingGames() {
     setEditStatus("");
     if (!password) return setEditStatus("Enter admin password first.");
-    setLoadingGames(true);
 
+    setLoadingGames(true);
     try {
       const res = await fetch("/api/admin/league-games", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password, schoolCode, divisionName }),
       });
+
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error ?? "Failed to load games");
-      setExistingGames(json?.games ?? []);
+
+      setExistingGames(Array.isArray(json?.games) ? json.games : []);
       setEditStatus("Games loaded.");
     } catch (e: any) {
-      setEditStatus(`Error loading games: ${e.message}`);
+      setEditStatus(`Error loading games: ${e?.message ?? "Unknown error"}`);
     } finally {
       setLoadingGames(false);
     }
   }
 
-  // When selecting a game, prefill edit fields
+  // Prefill edit scores when selecting a game
   useEffect(() => {
     if (!selectedGame) {
       setEditScore1("");
@@ -160,7 +162,7 @@ export default function AdminLeagueForm() {
       setEditStatus("Updated ✅ Refresh the school page to see standings update.");
       await loadExistingGames();
     } catch (e: any) {
-      setEditStatus(`Error updating game: ${e.message}`);
+      setEditStatus(`Error updating game: ${e?.message ?? "Unknown error"}`);
     }
   }
 
@@ -192,7 +194,7 @@ export default function AdminLeagueForm() {
       setSelectedGameId("");
       await loadExistingGames();
     } catch (e: any) {
-      setEditStatus(`Error deleting game: ${e.message}`);
+      setEditStatus(`Error deleting game: ${e?.message ?? "Unknown error"}`);
     }
   }
 
@@ -203,7 +205,6 @@ export default function AdminLeagueForm() {
         <p className="pla-subtleSm">Record new league games, or edit/delete existing ones.</p>
       </div>
 
-      {/* Password */}
       <label style={{ fontWeight: 900, display: "grid", gap: 6 }}>
         Admin Password
         <input
@@ -215,7 +216,6 @@ export default function AdminLeagueForm() {
         />
       </label>
 
-      {/* School + Division */}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
         <label style={{ fontWeight: 900 }}>
           School
@@ -242,9 +242,8 @@ export default function AdminLeagueForm() {
         </label>
       </div>
 
-      {/* RECORD NEW GAME */}
       <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid rgba(0,0,0,0.08)" }}>
-        <h3 style={{ margin: 0, fontSize: 16 }}>Record League Game (to 11)</h3>
+        <h3 style={{ margin: 0, fontSize: 16 }}>Record League Game (one game to 11)</h3>
 
         <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -327,7 +326,6 @@ export default function AdminLeagueForm() {
         </div>
       </div>
 
-      {/* EDIT/DELETE EXISTING GAME */}
       <div style={{ marginTop: 18, paddingTop: 14, borderTop: "1px solid rgba(0,0,0,0.08)" }}>
         <h3 style={{ margin: 0, fontSize: 16 }}>Edit / Delete League Game</h3>
 
